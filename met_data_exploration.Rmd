@@ -107,7 +107,6 @@ write.csv(merged_data, "merged_data.csv", row.names = FALSE)
 head(merged_data)
 ```
 
-## Permanova?? Look up other methods 
 
 # Trying one linear regression with one metabolite
 ```{r}
@@ -179,84 +178,6 @@ table(data_ses_T1$amai_13x6num)
 
 
 
-
-
-
-# The rest of this is just junk of me trying stuff out. Can likely delete later
-
-# Playing with the "omics" package in R - not available 
-```{r}
-install.packages("omics")
-```
-
-  # Giving up on MWAS....
-```{r}
-if (!requireNamespace("BiocManager", quietly = TRUE))
-    install.packages("BiocManager")
-
-BiocManager::install("MWASTools")
-```
-
-```{r}
-library(MWASTools)
-library(SummarizedExperiment)
-library(S4Vectors)
-```
-
-```{r}
-dim(met_matrix)
-```
-
-```{r}
-# Keep only metabolite columns
-metabolite_names <- setdiff(names(merged_data), c("FOLIOCC", "amai_13x6num", "Age_P01", "pub_onset", "AC_sexH"))
-met_matrix <- as.matrix(merged_data[, metabolite_names])
-rownames(met_matrix) <- merged_data$FOLIOCC
-
-# Select columns from merged_data
-covariates_df <- merged_data[, c("FOLIOCC", "amai_13x6num", "Age_P01", "pub_onset", "AC_sexH")]
-
-# Make it an S4Vectors DataFrame
-covariates <- S4Vectors::DataFrame(covariates_df)
-
-# Set rownames to sample IDs
-rownames(covariates) <- covariates_df$FOLIOCC
-
-# Check
-dim(covariates)
-```
-
-
-#MWAS needs a "summarized experiment" object
-```{r}
-
-my_SE <- SummarizedExperiment(
-  assays = list(metabolites = met_matrix),
-  colData = covariates
-)
-
-```
-
-# running linear regresion mwas:
-```{r}
-mwas_out <- MWAS_stats(
-  object = my_SE,
-  disease_id = "amai_13x6num",   #  SES (not actually disease, just exposure)
-  assoc_method = "lm",
-  covars = c("Age_P01", "pub_onset", "AC_sexH")
-)
-
-```
-
-```{r}
-significant_metabs <- MWAS_filter(
-  mwas_out,
-  type = "pvalue",
-  alpha_th = 0.001,  # adjust threshold if needed
-  sort = TRUE
-)
-head(significant_metabs)
-```
 
 
 
