@@ -1,0 +1,7 @@
+*.csv
+*.xlsx
+.Rhistory
+.RData
+.DS_Store
+  
+.Rproj.user
