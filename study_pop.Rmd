@@ -1,0 +1,80 @@
+---
+title: "met_data_studypop"
+output: html_document
+date: "2025-11-16"
+---
+```{r}
+library(dplyr)
+library(gtsummary)
+```
+
+Reading in merged data:
+```{r}
+data<-read.csv("/Users/jackielindstrom/Documents/ELEMENT/merged_data.csv")
+```
+
+
+# changing names of columns before making table (might be able to do it in the table but not sure how)
+```{r}
+pop_df <- data %>%
+  select(amai_13x6num, Age_P01, AC_sexH, pub_onset)
+pop_df <- pop_df %>%
+  mutate(AC_sexH = factor(AC_sexH,
+                     levels = c(1, 2),
+                     labels = c("Male", "Female"))
+  )
+pop_df<- pop_df %>%
+  mutate(amai_13x6num = recode (amai_13x6num,
+                               `6` = "A/B",
+                               `5` = "C+",
+                               `4` = "C",
+                               `3` = "D+",
+                               `2` = "D",
+                               `1` = "E")
+  )
+```
+
+```{r}
+lapply(pop_df, table)
+```
+```{r}
+
+pop_df$pub_onset <- factor(
+  pop_df$pub_onset,
+  levels = c(0, 1),
+  labels = c("No", "Yes")
+)
+table(pop_df$pub_onset)
+head(pop_df$pub_onset)
+
+```
+
+```{r}
+table(pop_df$pub_onset)
+```
+
+# Nicer study population/ descriptive table:
+## Reference: https://www.danieldsjoberg.com/gtsummary/
+
+```{r}
+table1 <-
+  pop_df |> 
+  tbl_summary(label = list(
+      Age_P01 ~ "Age (years)",
+      amai_13x6num ~ "AMAI Score",
+      AC_sexH ~ "Sex",
+      pub_onset ~ "Pubertal Onset"
+    ),) |>
+  bold_labels()
+
+table1
+```
+
+
+```{r}
+pop_df <- pop_df %>%
+  mutate(amai_13x6num = as.numeric(amai_13x6num))
+hist(pop_df$amai_13x6num)
+
+```
+

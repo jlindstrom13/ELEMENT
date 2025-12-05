@@ -1,0 +1,265 @@
+---
+title: "Metabolomics"
+output: html_document
+date: "2025-11-02"
+---
+```{r}
+library(dplyr)
+```
+
+### "P01" follow up visit circa ~2015 on ~ 500 adolescents (includes 223 of the 250 seen in 2012)
+
+#Reading in data
+```{r}
+data_ses<-read.csv("/Users/jackielindstrom/Documents/ELEMENT/P01_SES_201910.csv") # 
+data_met<-read.csv("/Users/jackielindstrom/Documents/ELEMENT/P01_Metab_Named_Logscale_202002.csv") #2015 P01 on ~ 500 adolescents (includes 223 of the 250 seen in 2012)
+data_sex_age<-read.csv("/Users/jackielindstrom/Documents/ELEMENT/P01_Sex_and_Age_202202.csv")
+data_maturation<-read.csv("/Users/jackielindstrom/Documents/ELEMENT/P01_Sexual_Maturation_201910.csv")
+data_metP20<-read.csv("/Users/jackielindstrom/Documents/ELEMENT/P20_Metabolites_QCadj_KNN5_20171204.csv") # 2011: Untargeted metabolomics from fasting blood & targeted on amino acids and acylcarnitines
+```
+
+Sex=2: female, Sex=1: male?
+```{r}
+head(data_sex_age)
+```
+
+# Pubertal onset not computed in data_maturation data frame yet. Code to calculated it below:
+
+```{r}
+#initiate binary puberty onset column
+data_maturation$pub_onset<-NA
+#pub_onset=0 if both P2_1 and P2_2 for female =1
+data_maturation$pub_onset<-ifelse(data_maturation$p2_1==1 &  data_maturation$p2_2==1 & data_maturation$sexo==2, 0, data_maturation$pub_onset)
+
+#pub_onset=0 if both P2_1 and P2_3 for male =1
+data_maturation$pub_onset<-ifelse(data_maturation$p2_1==1 &  data_maturation$p2_3==1 & data_maturation$sexo==1, 0, data_maturation$pub_onset)
+
+#pub_onset=1 if either P2_1 or P2 _2 for female is greater than 1
+data_maturation$pub_onset<-ifelse((data_maturation$p2_1>1 |  data_maturation$p2_2>1) & data_maturation$sexo==2, 1, data_maturation$pub_onset)
+
+#pub_onset=1 if either P2 _1 and P2_ 3 for male is greater than 1
+data_maturation$pub_onset<-ifelse((data_maturation$p2_1>1 |  data_maturation$p2_3>1) & data_maturation$sexo==1, 1, data_maturation$pub_onset)
+
+table(data_maturation$pub_onset)
+```
+
+#note: look into AMAI 13x6 or 8x7.... 
+
+# Make new data frames for each with just etapa = T1 visits
+```{r}
+# T1_ses_measurements<-sum(data_ses$etapa == "T1", na.rm = TRUE)
+# cat("# T1 SES Measurements:", T1_ses_measurements,
+   #  "# T2 SES Measurements:", T2_ses_measurements)
+
+data_ses_T1 <- data_ses[data_ses$etapa == "T1", ]
+#same with age_sex
+data_sex_age_T1 <- data_sex_age[data_sex_age$etapa == "T1", ]
+# same with maturation
+data_mat_T1 <- data_maturation[data_maturation$etapa == "T1", ]
+```
+
+# Recode SES into numerical, with A/B= 6 being the best SES
+```{r}
+data_ses_T1$amai_13x6num <- dplyr::recode(data_ses_T1$amai_13x6,
+                      "A/B" = 6,
+                      "C+" = 5,
+                      "C" = 4,
+                      "D+" = 3,
+                      "D" = 2,
+                      "E" = 1)
+```
+
+
+```{r}
+
+data_ses_T1$amai_8x7num <- dplyr::recode(data_ses_T1$amai_8x7,
+                      "A/B" = 7,
+                      "C+"= 6,
+                      "C" = 5,
+                      "C-" = 4,
+                      "D+" = 3,
+                      "D" = 2,
+                      "E" = 1)
+
+print(table(data_ses_T1$amai_8x7))
+print(table(data_ses_T1$amai_8x7num))
+```
+
+
+```{r}
+hist(data_ses_T1$amai_8x7num)
+```
+
+```{r}
+hist(data_ses_T1$amai_13x6num)
+```
+# 1= worst SES, 6= best ses
+
+# Merge variables of interest into one data frame (use "FOLIO"). Save to CSV "merged_data.csv"
+```{r}
+# left join keeps all rows in data_met, but will put NA if nothing in age/ses/sex
+merged_data <- data_met %>%
+  left_join(select(data_ses_T1, foliocc, amai_13x6num, amai_8x7num), c("FOLIOCC" = "foliocc")) %>%
+  left_join(select(data_sex_age_T1, FOLIOCC, Age_P01, AC_sexH), by = "FOLIOCC") %>%
+  left_join(select(data_mat_T1, foliocc, pub_onset), by = c("FOLIOCC" = "foliocc"))
+
+write.csv(merged_data, "merged_data.csv", row.names = FALSE)
+head(merged_data)
+```
+
+## Permanova?? Look up other methods 
+
+# Trying one linear regression with one metabolite
+```{r}
+fit1 <- lm(Keto_14_0_1 ~ amai_13x6num + Age_P01 + pub_onset + AC_sexH, data = merged_data)
+summary(fit1)
+```
+
+# Repeating linear regression for all metabolites: 
+```{r}
+# Select just metabolite columns from merged data
+metabolite_names <- setdiff(names(merged_data), c("FOLIOCC", "amai_13x6num", "Age_P01", "pub_onset", "AC_sexH"))
+
+# Linear regression for each metabolite
+results_list <- lapply(metabolite_names, function(met){
+  formula <- as.formula(paste(met, "~ amai_13x6num + Age_P01 + pub_onset + AC_sexH"))
+  fit <- lm(formula, data = merged_data)
+  summary(fit)$coefficients  # get the coeff table
+})
+
+# Name list with metabolite names
+names(results_list) <- metabolite_names
+
+# Ex: see results for metabolite 55
+results_list[[55]]
+metabolite_names[[5]]
+
+# count how many have sig p values for SES
+pvals_amai <- sapply(results_list, function(res){
+  res["amai_13x6num", "Pr(>|t|)"]
+})
+
+sum(pvals_amai < 0.05)
+```
+
+
+# Select just significant metabolite- SES associations
+```{r}
+# Initialize empty list to store significant results
+sig_list <- list()
+
+for (met in metabolite_names) {
+  coef_table <- results_list[[met]]
+  
+  pval <- coef_table["amai_13x6num", "Pr(>|t|)"]
+  if (!is.na(pval) && pval < 0.05) {
+    sig_list[[met]] <- c(
+      estimate = coef_table["amai_13x6num", "Estimate"],
+      p.value = pval
+    )
+  }
+}
+
+sig_table <- do.call(rbind, sig_list) # Combine into a df
+sig_table <- data.frame(metabolite = rownames(sig_table), sig_table, row.names = NULL)
+
+sig_table <- sig_table[order(sig_table$p.value), ] 
+
+print(sig_table)
+write.csv(sig_table, "sig_table.csv", row.names = FALSE)
+```
+
+
+
+
+```{r}
+hist(data_ses_T1$amai_13x6num)
+table(data_ses_T1$amai_13x6num)
+```
+
+
+
+
+
+
+# The rest of this is just junk of me trying stuff out. Can likely delete later
+
+# Playing with the "omics" package in R - not available 
+```{r}
+install.packages("omics")
+```
+
+  # Giving up on MWAS....
+```{r}
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("MWASTools")
+```
+
+```{r}
+library(MWASTools)
+library(SummarizedExperiment)
+library(S4Vectors)
+```
+
+```{r}
+dim(met_matrix)
+```
+
+```{r}
+# Keep only metabolite columns
+metabolite_names <- setdiff(names(merged_data), c("FOLIOCC", "amai_13x6num", "Age_P01", "pub_onset", "AC_sexH"))
+met_matrix <- as.matrix(merged_data[, metabolite_names])
+rownames(met_matrix) <- merged_data$FOLIOCC
+
+# Select columns from merged_data
+covariates_df <- merged_data[, c("FOLIOCC", "amai_13x6num", "Age_P01", "pub_onset", "AC_sexH")]
+
+# Make it an S4Vectors DataFrame
+covariates <- S4Vectors::DataFrame(covariates_df)
+
+# Set rownames to sample IDs
+rownames(covariates) <- covariates_df$FOLIOCC
+
+# Check
+dim(covariates)
+```
+
+
+#MWAS needs a "summarized experiment" object
+```{r}
+
+my_SE <- SummarizedExperiment(
+  assays = list(metabolites = met_matrix),
+  colData = covariates
+)
+
+```
+
+# running linear regresion mwas:
+```{r}
+mwas_out <- MWAS_stats(
+  object = my_SE,
+  disease_id = "amai_13x6num",   #  SES (not actually disease, just exposure)
+  assoc_method = "lm",
+  covars = c("Age_P01", "pub_onset", "AC_sexH")
+)
+
+```
+
+```{r}
+significant_metabs <- MWAS_filter(
+  mwas_out,
+  type = "pvalue",
+  alpha_th = 0.001,  # adjust threshold if needed
+  sort = TRUE
+)
+head(significant_metabs)
+```
+
+
+
+
+
+
