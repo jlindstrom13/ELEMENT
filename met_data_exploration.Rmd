@@ -15,16 +15,16 @@ data_ses<-read.csv("/Users/jackielindstrom/Documents/ELEMENT/P01_SES_201910.csv"
 data_met<-read.csv("/Users/jackielindstrom/Documents/ELEMENT/P01_Metab_Named_Logscale_202002.csv") #2015 P01 on ~ 500 adolescents (includes 223 of the 250 seen in 2012)
 data_sex_age<-read.csv("/Users/jackielindstrom/Documents/ELEMENT/P01_Sex_and_Age_202202.csv")
 data_maturation<-read.csv("/Users/jackielindstrom/Documents/ELEMENT/P01_Sexual_Maturation_201910.csv")
-data_metP20<-read.csv("/Users/jackielindstrom/Documents/ELEMENT/P20_Metabolites_QCadj_KNN5_20171204.csv") # 2011: Untargeted metabolomics from fasting blood & targeted on amino acids and acylcarnitines
+data_metP20<-read.csv("/Users/jackielindstrom/Documents/ELEMENT/P20_Metabolites_QCadj_KNN5_20171204.csv") # 2011: Untargeted metabolomics from fasting blood & targeted on amino acids and acylcarnitines ... not used for this project!
+dim(data_met)
 ```
 
-Sex=2: female, Sex=1: male?
+# Check: Sex=2: female, Sex=1: male?
 ```{r}
 head(data_sex_age)
 ```
 
 # Pubertal onset not computed in data_maturation data frame yet. Code to calculated it below:
-
 ```{r}
 #initiate binary puberty onset column
 data_maturation$pub_onset<-NA
@@ -43,22 +43,15 @@ data_maturation$pub_onset<-ifelse((data_maturation$p2_1>1 |  data_maturation$p2_
 table(data_maturation$pub_onset)
 ```
 
-#note: look into AMAI 13x6 or 8x7.... 
 
 # Make new data frames for each with just etapa = T1 visits
 ```{r}
-# T1_ses_measurements<-sum(data_ses$etapa == "T1", na.rm = TRUE)
-# cat("# T1 SES Measurements:", T1_ses_measurements,
-   #  "# T2 SES Measurements:", T2_ses_measurements)
-
 data_ses_T1 <- data_ses[data_ses$etapa == "T1", ]
-#same with age_sex
 data_sex_age_T1 <- data_sex_age[data_sex_age$etapa == "T1", ]
-# same with maturation
 data_mat_T1 <- data_maturation[data_maturation$etapa == "T1", ]
 ```
 
-# Recode SES into numerical, with A/B= 6 being the best SES
+# Recode 13x6 SES into numerical, with A/B= 6 being the best SES
 ```{r}
 data_ses_T1$amai_13x6num <- dplyr::recode(data_ses_T1$amai_13x6,
                       "A/B" = 6,
@@ -69,7 +62,7 @@ data_ses_T1$amai_13x6num <- dplyr::recode(data_ses_T1$amai_13x6,
                       "E" = 1)
 ```
 
-
+# Recode 8x7 SES into numerical, with A/B= 7 being the best SES
 ```{r}
 
 data_ses_T1$amai_8x7num <- dplyr::recode(data_ses_T1$amai_8x7,
@@ -80,11 +73,7 @@ data_ses_T1$amai_8x7num <- dplyr::recode(data_ses_T1$amai_8x7,
                       "D+" = 3,
                       "D" = 2,
                       "E" = 1)
-
-print(table(data_ses_T1$amai_8x7))
-print(table(data_ses_T1$amai_8x7num))
 ```
-
 
 ```{r}
 hist(data_ses_T1$amai_8x7num)
@@ -93,7 +82,6 @@ hist(data_ses_T1$amai_8x7num)
 ```{r}
 hist(data_ses_T1$amai_13x6num)
 ```
-# 1= worst SES, 6= best ses
 
 # Merge variables of interest into one data frame (use "FOLIO"). Save to CSV "merged_data.csv"
 ```{r}
@@ -110,18 +98,17 @@ head(merged_data)
 
 # Trying one linear regression with one metabolite
 ```{r}
-fit1 <- lm(Keto_14_0_1 ~ amai_13x6num + Age_P01 + pub_onset + AC_sexH, data = merged_data)
+fit1 <- lm(Keto_14_0_1 ~ amai_8x7num + Age_P01 + pub_onset + AC_sexH, data = merged_data)
 summary(fit1)
 ```
 
-# Repeating linear regression for all metabolites: 
 ```{r}
 # Select just metabolite columns from merged data
-metabolite_names <- setdiff(names(merged_data), c("FOLIOCC", "amai_13x6num", "Age_P01", "pub_onset", "AC_sexH"))
+metabolite_names <- setdiff(names(merged_data), c("FOLIOCC", "amai_13x6num", "amai_8x7num", "Age_P01", "pub_onset", "AC_sexH"))
 
 # Linear regression for each metabolite
 results_list <- lapply(metabolite_names, function(met){
-  formula <- as.formula(paste(met, "~ amai_13x6num + Age_P01 + pub_onset + AC_sexH"))
+  formula <- as.formula(paste(met, "~ amai_8x7num + Age_P01 + pub_onset + AC_sexH"))
   fit <- lm(formula, data = merged_data)
   summary(fit)$coefficients  # get the coeff table
 })
@@ -135,48 +122,50 @@ metabolite_names[[5]]
 
 # count how many have sig p values for SES
 pvals_amai <- sapply(results_list, function(res){
-  res["amai_13x6num", "Pr(>|t|)"]
+  res["amai_8x7num", "Pr(>|t|)"]
 })
-
-sum(pvals_amai < 0.05)
+betas_amai <- sapply(results_list, function(res){
+  res["amai_8x7num", "Estimate"]
+})
 ```
-
-
-# Select just significant metabolite- SES associations
 ```{r}
-# Initialize empty list to store significant results
-sig_list <- list()
 
-for (met in metabolite_names) {
-  coef_table <- results_list[[met]]
-  
-  pval <- coef_table["amai_13x6num", "Pr(>|t|)"]
-  if (!is.na(pval) && pval < 0.05) {
-    sig_list[[met]] <- c(
-      estimate = coef_table["amai_13x6num", "Estimate"],
-      p.value = pval
-    )
-  }
-}
-
-sig_table <- do.call(rbind, sig_list) # Combine into a df
-sig_table <- data.frame(metabolite = rownames(sig_table), sig_table, row.names = NULL)
-
-sig_table <- sig_table[order(sig_table$p.value), ] 
-
-print(sig_table)
-write.csv(sig_table, "sig_table.csv", row.names = FALSE)
 ```
 
+# Correct for FDR using benjamin- h
+```{r}
+FDR_amai <- p.adjust(pvals_amai, method = "BH")
 
+all_results <- data.frame(
+  metabolite = metabolite_names,
+  beta =betas_amai,
+  p.value = pvals_amai,
+  FDR = FDR_amai
+)
+```
 
 
 ```{r}
-hist(data_ses_T1$amai_13x6num)
-table(data_ses_T1$amai_13x6num)
+sig_before_FDR <- subset(all_results, p.value < 0.05)
+sig_before_FDR <- sig_before_FDR[order(sig_before_FDR$p.value), ]
+
+print(sig_before_FDR)
+write.csv(sig_before_FDR, "sig_before_FDR", row.names=FALSE)
 ```
 
+```{r}
+# FDR < 0.1
+sig_FDR_10 <- subset(all_results, FDR < 0.1)
+sig_FDR_10 <- sig_FDR[order(sig_FDR$FDR), ]
 
+print(sig_FDR_10)
+write.csv(sig_FDR_10, "sig_FDR_10.csv", row.names = FALSE)
+
+# FDR < 0.2
+sig_FDR_20 <- subset(all_results, FDR < 0.20)
+sig_FDR_20 <- sig_FDR_20[order(sig_FDR_20$FDR), ]
+print(sig_FDR_20)
+```
 
 
 
