@@ -128,9 +128,6 @@ betas_amai <- sapply(results_list, function(res){
   res["amai_8x7num", "Estimate"]
 })
 ```
-```{r}
-
-```
 
 # Correct for FDR using benjamin- h
 ```{r}
@@ -156,7 +153,7 @@ write.csv(sig_before_FDR, "sig_before_FDR", row.names=FALSE)
 ```{r}
 # FDR < 0.1
 sig_FDR_10 <- subset(all_results, FDR < 0.1)
-sig_FDR_10 <- sig_FDR[order(sig_FDR$FDR), ]
+sig_FDR_10 <- sig_FDR_10[order(sig_FDR_10$FDR), ]
 
 print(sig_FDR_10)
 write.csv(sig_FDR_10, "sig_FDR_10.csv", row.names = FALSE)
@@ -167,8 +164,113 @@ sig_FDR_20 <- sig_FDR_20[order(sig_FDR_20$FDR), ]
 print(sig_FDR_20)
 ```
 
+# Making nicer table of post FDR results:
 
 
+```{r}
+library(rempsyc)
+library(flextable)
+
+df_results <- data.frame(
+  metabolite = all_results$metabolite,
+  beta       = all_results$beta,
+  p.value    = all_results$p.value,
+  FDR        = all_results$FDR
+)
+
+df_sub10 <- subset(df_results, FDR < 0.1)
+
+ft <- nice_table(
+  df_sub10,
+  title = c("Table 1", "Metabolites Associated with SES (FDR < 0.10)"),
+  note  = "Models adjusted for age, sex hormone, and pubertal onset."
+)
+ft
+```
+
+
+```{r}
+df_sub20 <- subset(df_results, FDR < 0.2)
+ft2 <- nice_table(
+  df_sub20,
+  title = c("Table 2", "Metabolites Associated with SES (FDR < 0.20)"),
+  note  = "Models adjusted for age, sex hormone, and pubertal onset."
+)
+
+ft2 <- flextable::color(
+  ft2,
+  i = df_sub20$metabolite == "FA_13_0__DiC_",   
+  j = "metabolite",                        
+  color = "blue"                             
+)
+
+ft2
+
+```
+
+
+```{r}
+df_sub25 <- subset(df_results, FDR < 0.25)
+ft3 <- nice_table(
+  df_sub25,
+  title = c("Table 3", "Metabolites Associated with SES (FDR < 0.25)"),
+  note  = "Models adjusted for age, sex hormone, and pubertal onset."
+)
+
+ft3
+```
+```{r}
+df_sub30 <- subset(df_results, FDR < 0.30)
+ft4 <- nice_table(
+  df_sub30,
+  title = c("Table 3", "Metabolites Associated with SES (FDR < 0.30)"),
+  note  = "Models adjusted for age, sex hormone, and pubertal onset."
+)
+
+print(ft4)
+```
+
+```{r}
+df_unadj <- subset(df_results, p.value < 0.05)
+
+ft5 <- nice_table(
+  df_unadj,
+  title = c("Table 4", "Metabolites Associated with SES at uncorrected pvalue < 0.05"),
+  note  = "Models adjusted for age, sex hormone, and pubertal onset."
+)
+
+print(ft5)
+save_as_docx(ft5, path = "ft5_table.docx")
+```
+
+
+```{r}
+data_met_nofolio <- data_met[, -1]
+```
+
+
+# Trying IRT 
+
+```{r}
+library(mirt)
+
+fit_attempt <- mirt(data=data_met_nofolio, 1, itemtype = "graded")  
+loadings <- coef(fit_attempt, IRTpars = TRUE, simplify = TRUE)$items
+
+# Get loadings
+head(loadings)
+```
+
+```{r}
+theta <- fscores(fit_attempt)
+merged_data$IRT_met_score <- theta
+```
+
+
+```{r}
+summary(lm(IRT_met_score ~ amai_8x7num + Age_P01 + AC_sexH + pub_onset,
+           data = merged_data))
+```
 
 
 
