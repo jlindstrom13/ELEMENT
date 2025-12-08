@@ -241,6 +241,7 @@ ft5 <- nice_table(
 
 print(ft5)
 save_as_docx(ft5, path = "ft5_table.docx")
+
 ```
 
 
@@ -248,18 +249,66 @@ save_as_docx(ft5, path = "ft5_table.docx")
 data_met_nofolio <- data_met[, -1]
 ```
 
+Changing all met data to quartiles
+```{r}
+met_data_ord <- as.data.frame(
+  apply(data_met_nofolio, 2, function(x) {
+    cut(x, breaks = quantile(x, probs = seq(0, 1, 0.25), na.rm = TRUE),
+        include.lowest = TRUE, labels = FALSE)
+  })
+)
+```
 
-# Trying IRT 
+
+# Trying IRT with ALL Metabolites before looking at SES associations
 
 ```{r}
 library(mirt)
 
-fit_attempt <- mirt(data=data_met_nofolio, 1, itemtype = "graded")  
-loadings <- coef(fit_attempt, IRTpars = TRUE, simplify = TRUE)$items
+fit_met <- mirt(data=met_data_ord, 1, itemtype = "graded")  #use "graded" bc responses are ordinal, not binary like in the class example
+parms_met <- coef(fit_met, IRTpar = TRUE, simplify = TRUE) #also called loadings!
 
-# Get loadings
-head(loadings)
+head(parms_met)
 ```
+# tells me how difficult it is to get each outcome (1,2,3,4, concentration level depending on metaoblite)
+```{r}
+plot(fit_met, type="trace", facet=FALSE)
+```
+
+# shows the latent metabolic trait was measured w higest precision near the mean of theta=0, more reliable for average person?
+```{r}
+plot(fit_met, type = "info")
+```
+
+```{r}
+plot(fit_met, type = "trace",  which.items = 1:10) 
+```
+
+
+Are these items performing similarly for high/ low ses?
+```{r}
+# first split SES into high / low... 
+merged_data$amai_binary <- ifelse(
+  merged_data$amai_8x7num >= median(merged_data$amai_8x7num, na.rm = TRUE),
+  1, 
+  0
+)
+table(merged_data$amai_binary)
+```
+
+Are these items performing similarly for high and low SES?
+Error in probgrm(theta, DISC[i], CB[i, ]) : slope is missing or negative
+```{r}
+dif_met <- lordif(met_data_ord, merged_data$amai_binary)
+```
+
+trying something else
+```{r}
+DIF_results <- DIF(fit_met, which.par = c("a1", "d"), covariates = merged_data$amai_binary)
+summary(DIF_results)
+
+```
+
 
 ```{r}
 theta <- fscores(fit_attempt)
@@ -272,6 +321,64 @@ summary(lm(IRT_met_score ~ amai_8x7num + Age_P01 + AC_sexH + pub_onset,
            data = merged_data))
 ```
 
+# IRT but with metabolites identified as being sig associated with SES using df_unadj
+```{r}
+head(df_unadj)
+```
 
+```{r}
+library(ggplot2)
+
+names_met_unadj<-df_unadj$metabolite
+
+metab_matrix <- merged_data[, colnames(merged_data) %in% names_met_unadj]
+
+
+metab_ord <- as.data.frame(
+  apply(metab_matrix, 2, function(x) {
+    cut(x, breaks = quantile(x, probs = seq(0, 1, 0.25), na.rm = TRUE),
+        include.lowest = TRUE, labels = FALSE)
+  })
+)
+fit_ord <- mirt(metab_ord, 1, itemtype = "graded")
+
+theta1 <- fscores(fit_ord)
+head(theta1)
+```
+```{r}
+parms_latent <- coef(fit_ord, IRTpars = TRUE, simplify = TRUE)$items
+parms_latent
+```
+
+
+# 2 latent traits?
+```{r}
+fit2 <- mirt(metab_ord, 2, itemtype = "graded")
+theta2 <- fscores(fit2)
+```
+```{r}
+head(theta2)
+```
+```{r}
+parms_latent2<-coef(fit2, IRTpars = TRUE, simplify = TRUE)$items
+parms_latent2
+```
+
+
+# Pearsons correlation heatmap... not sure it shows there are a lot of correlations... 
+```{r}
+
+metab_matrix <- merged_data[, colnames(merged_data) %in% names_met_unadj]
+
+cor_mat <- cor(metab_matrix, use = "pairwise.complete.obs", method = "pearson")
+
+png("heatmap.png", width = 1200, height = 1200, res = 150)
+heatmap(cor_mat, 
+        main = "Pearson Correlations: 27 Metabolites, Unadjusted for FDR",
+        col = colorRampPalette(c("lightblue", "white", "red"))(100),
+        margins = c(15,15))
+dev.off()
+
+```
 
 
